@@ -1,0 +1,18 @@
+[
+  {
+    "id": "d8a62f39-e92b-4776-a14c-d8b95eecd143",
+    "name": "Shourya Sharma",
+    "email": "radhikesh2809@gmail.com",
+    "phone": "7906355122",
+    "passwordHash": "anVzdGRpYWxfU2hvdXJ5YUAx",
+    "createdAt": "2026-06-01T12:54:08.684Z"
+  },
+  {
+    "id": "98a4a0ef-b8be-41af-8a11-14c5b09a70cf",
+    "name": "Anubhav Sharma",
+    "email": "agrimenterprises05@gmail.com",
+    "phone": "7417011701",
+    "passwordHash": "anVzdGRpYWxfQW51YmhhdkAxOTkx",
+    "createdAt": "2026-06-01T17:47:08.113Z"
+  }
+]
