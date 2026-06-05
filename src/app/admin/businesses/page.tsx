@@ -312,7 +312,7 @@ const [statusFilter, setStatusFilter] = useState("all");
             gap: 18,
           }}
         >
-          {businesses.map((business) => {
+          filteredBusinesses.map((business) => {
             const status = getStatus(business);
 
             return (

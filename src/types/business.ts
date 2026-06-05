@@ -13,8 +13,7 @@ export type OwnerUser = {
 
   phone?: string;
 
-  password?: string;
-  passwordHash?: string;
+  passwordHash: string;
 
   role: UserRole;
 
@@ -34,6 +33,8 @@ export type PublicOwnerUser = {
 
 export type Business = {
   id: string;
+
+  slug: string;
 
   ownerId: string;
   ownerName?: string;
@@ -58,6 +59,8 @@ export type Business = {
   services: string[];
 
   imageUrl?: string;
+  logoUrl?: string;
+
   gallery?: string[];
 
   latitude?: number;
@@ -73,6 +76,14 @@ export type Business = {
   whatsappClicks: number;
   directionClicks: number;
   websiteClicks: number;
+
+  rating?: number;
+  reviewCount?: number;
+
+  featured?: boolean;
+  featuredUntil?: string;
+
+  searchKeywords?: string[];
 
   createdAt: string;
   updatedAt: string;

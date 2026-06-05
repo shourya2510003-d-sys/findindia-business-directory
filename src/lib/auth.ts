@@ -2,42 +2,87 @@ import crypto from "crypto";
 import type { OwnerUser } from "@/types/business";
 
 export type StoredUser = OwnerUser & {
-  password?: string;
-  passwordHash?: string;
+  passwordHash: string;
 };
 
 const AUTH_KEY = "findindia_owner_user";
-const JWT_SECRET =
-  process.env.JWT_SECRET || "findindia_development_secret";
+
+// TypeScript-safe secret
+const SECRET =
+  process.env.JWT_SECRET ??
+  "findindia_development_secret";
+
+const TOKEN_EXPIRY_MS =
+  7 * 24 * 60 * 60 * 1000;
 
 /* ----------------------------------
    Password Helpers
 ----------------------------------- */
 
-export function hashPassword(password: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(password)
-    .digest("hex");
+export function hashPassword(
+  password: string
+): string {
+  const salt = crypto
+    .randomBytes(16)
+    .toString("hex");
+
+  const hash = crypto
+    .pbkdf2Sync(
+      password,
+      salt,
+      100000,
+      64,
+      "sha512"
+    )
+    .toString("hex");
+
+  return `${salt}:${hash}`;
 }
 
 export function verifyPassword(
   password: string,
-  hashedPassword: string
+  storedHash: string
 ): boolean {
-  return hashPassword(password) === hashedPassword;
+  try {
+    const [salt, originalHash] =
+      storedHash.split(":");
+
+    if (!salt || !originalHash) {
+      return false;
+    }
+
+    const hash = crypto
+      .pbkdf2Sync(
+        password,
+        salt,
+        100000,
+        64,
+        "sha512"
+      )
+      .toString("hex");
+
+    return crypto.timingSafeEqual(
+      Buffer.from(hash, "hex"),
+      Buffer.from(originalHash, "hex")
+    );
+  } catch {
+    return false;
+  }
 }
 
 /* ----------------------------------
    Public User
 ----------------------------------- */
 
-export function publicUser(user: StoredUser): OwnerUser {
+export function publicUser(
+  user: StoredUser
+): OwnerUser {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     phone: user.phone,
+    passwordHash: user.passwordHash,
     role: user.role,
     createdAt: user.createdAt,
   };
@@ -47,13 +92,18 @@ export function publicUser(user: StoredUser): OwnerUser {
    Token Helpers
 ----------------------------------- */
 
-export function createToken(user: OwnerUser): string {
+export function createToken(
+  user: OwnerUser
+): string {
   const payload = {
     id: user.id,
     name: user.name,
     email: user.email,
     role: user.role,
-    ts: Date.now(),
+    iat: Date.now(),
+    exp:
+      Date.now() +
+      TOKEN_EXPIRY_MS,
   };
 
   const data = Buffer.from(
@@ -61,7 +111,7 @@ export function createToken(user: OwnerUser): string {
   ).toString("base64");
 
   const signature = crypto
-    .createHmac("sha256", JWT_SECRET)
+    .createHmac("sha256", SECRET)
     .update(data)
     .digest("hex");
 
@@ -72,33 +122,69 @@ export function verifyToken(
   token: string
 ): OwnerUser | null {
   try {
-    const [data, signature] = token.split(".");
+    const [data, signature] =
+      token.split(".");
 
     if (!data || !signature) {
       return null;
     }
 
-    const expectedSignature = crypto
-      .createHmac("sha256", JWT_SECRET)
-      .update(data)
-      .digest("hex");
+    const expectedSignature =
+      crypto
+        .createHmac(
+          "sha256",
+          SECRET
+        )
+        .update(data)
+        .digest("hex");
 
-    if (expectedSignature !== signature) {
+    try {
+      if (
+        !crypto.timingSafeEqual(
+          Buffer.from(
+            expectedSignature,
+            "hex"
+          ),
+          Buffer.from(
+            signature,
+            "hex"
+          )
+        )
+      ) {
+        return null;
+      }
+    } catch {
       return null;
     }
 
     const decoded = JSON.parse(
-      Buffer.from(data, "base64").toString("utf8")
+      Buffer.from(
+        data,
+        "base64"
+      ).toString("utf8")
     );
+
+    if (
+      !decoded.exp ||
+      Date.now() > decoded.exp
+    ) {
+      return null;
+    }
 
     return {
       id: decoded.id,
       name: decoded.name,
       email: decoded.email,
-      role: decoded.role || "owner",
-      createdAt: decoded.ts
-        ? new Date(decoded.ts).toISOString()
-        : new Date().toISOString(),
+      role:
+        decoded.role || "owner",
+
+      // OwnerUser type satisfy karne ke liye
+      passwordHash: "",
+
+      createdAt: new Date(
+        decoded.iat ||
+          Date.now()
+      ).toISOString(),
     };
   } catch {
     return null;
@@ -109,12 +195,17 @@ export function verifyToken(
    Browser User Helpers
 ----------------------------------- */
 
-export function getCurrentUser(): OwnerUser | null {
+export function getCurrentUser():
+  | OwnerUser
+  | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const raw = localStorage.getItem(AUTH_KEY);
+  const raw =
+    localStorage.getItem(
+      AUTH_KEY
+    );
 
   if (!raw) {
     return null;
@@ -149,7 +240,9 @@ export function logoutUser(): void {
     return;
   }
 
-  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(
+    AUTH_KEY
+  );
 
   window.dispatchEvent(
     new Event("auth-change")
@@ -206,15 +299,23 @@ export function getBearerToken(
   request: Request
 ): string | null {
   const authHeader =
-    request.headers.get("authorization");
+    request.headers.get(
+      "authorization"
+    );
 
   if (!authHeader) {
     return null;
   }
 
-  if (!authHeader.startsWith("Bearer ")) {
+  if (
+    !authHeader.startsWith(
+      "Bearer "
+    )
+  ) {
     return null;
   }
 
-  return authHeader.slice(7).trim();
+  return authHeader
+    .slice(7)
+    .trim();
 }

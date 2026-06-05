@@ -50,11 +50,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const savedPasswordHash =
-      user.passwordHash ||
-      user.password ||
-      "";
-
+   const savedPasswordHash =
+  user.passwordHash ?? "";
     if (!savedPasswordHash) {
       return NextResponse.json(
         {

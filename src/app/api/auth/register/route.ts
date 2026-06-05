@@ -19,6 +19,18 @@ export async function POST(request: Request) {
     const phone = String(body.phone ?? "").trim();
     const password = String(body.password ?? "");
 
+    const emailRegex =
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+if (!emailRegex.test(email)) {
+  return NextResponse.json(
+    {
+      error: "Invalid email address",
+    },
+    { status: 400 }
+  );
+}
+
     if (!name || !email || !phone || !password) {
       return NextResponse.json(
         { error: "All fields are required" },
@@ -26,12 +38,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
-        { status: 400 }
-      );
-    }
+    if (password.length < 8) {
+  return NextResponse.json(
+    {
+      error:
+        "Password must be at least 8 characters",
+    },
+    { status: 400 }
+  );
+}
 
     const users = getUsers();
 

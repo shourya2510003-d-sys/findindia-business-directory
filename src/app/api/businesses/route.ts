@@ -23,6 +23,33 @@ function splitServices(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function buildSearchKeywords(
+  businessName: string,
+  category: string,
+  city: string,
+  state: string,
+  services: string[]
+): string[] {
+  return [
+    businessName,
+    category,
+    city,
+    state,
+    ...services,
+  ]
+    .map((item) => item.toLowerCase().trim())
+    .filter(Boolean);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -32,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     const businesses = await getBusinesses();
 
-    // Owner dashboard
+    // Owner Dashboard
     if (mine === "true") {
       const token = getBearerToken(req);
 
@@ -53,7 +80,8 @@ export async function GET(req: NextRequest) {
       }
 
       const myBusinesses = businesses.filter(
-        (business: Business) => business.ownerId === user.id
+        (business: Business) =>
+          business.ownerId === user.id
       );
 
       return NextResponse.json(
@@ -62,7 +90,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Admin dashboard
+    // Admin Dashboard
     if (admin === "true") {
       const token = getBearerToken(req);
 
@@ -88,11 +116,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Public listings
+    // Public Listings
     const approvedBusinesses = businesses.filter(
       (business: Business) =>
-        business.status === "approved" ||
-        business.verified === true
+        business.status === "approved"
     );
 
     return NextResponse.json(
@@ -137,22 +164,45 @@ export async function POST(req: NextRequest) {
       .trim()
       .replace(/\s+/g, " ");
 
-    const category = String(body.category || "").trim();
-    const description = String(body.description || "").trim();
+    const category = String(
+      body.category || ""
+    ).trim();
 
-    const address = String(body.address || "").trim();
-    const city = String(body.city || "").trim();
-    const state = String(body.state || "").trim();
-    const pincode = String(body.pincode || "").trim();
+    const description = String(
+      body.description || ""
+    ).trim();
 
-    const phone = String(body.phone || "").trim();
-    const whatsapp = String(body.whatsapp || phone).trim();
+    const address = String(
+      body.address || ""
+    ).trim();
+
+    const city = String(
+      body.city || ""
+    ).trim();
+
+    const state = String(
+      body.state || ""
+    ).trim();
+
+    const pincode = String(
+      body.pincode || ""
+    ).trim();
+
+    const phone = String(
+      body.phone || ""
+    ).trim();
+
+    const whatsapp = String(
+      body.whatsapp || phone
+    ).trim();
 
     const email = String(
       body.email || user.email || ""
     ).trim();
 
-    const website = String(body.website || "").trim();
+    const website = String(
+      body.website || ""
+    ).trim();
 
     const openingHours = String(
       body.openingHours || "9 AM - 9 PM"
@@ -168,7 +218,33 @@ export async function POST(req: NextRequest) {
       !phone
     ) {
       return NextResponse.json(
-        { error: "Please fill all required fields" },
+        {
+          error:
+            "Please fill all required fields",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      businessName.length < 3 ||
+      businessName.length > 120
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Business name must be between 3 and 120 characters",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (description.length > 2000) {
+      return NextResponse.json(
+        {
+          error:
+            "Description cannot exceed 2000 characters",
+        },
         { status: 400 }
       );
     }
@@ -187,6 +263,77 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (website) {
+      try {
+        const parsedUrl = new URL(
+          website.startsWith("http")
+            ? website
+            : `https://${website}`
+        );
+
+        if (
+          !["http:", "https:"].includes(
+            parsedUrl.protocol
+          )
+        ) {
+          throw new Error();
+        }
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid website URL" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const services = splitServices(
+      body.services
+    );
+
+    if (services.length > 20) {
+      return NextResponse.json(
+        {
+          error:
+            "Maximum 20 services allowed",
+        },
+        { status: 400 }
+      );
+    }
+
+    const latitude =
+      body.latitude !== undefined &&
+      body.latitude !== null &&
+      body.latitude !== ""
+        ? Number(body.latitude)
+        : undefined;
+
+    const longitude =
+      body.longitude !== undefined &&
+      body.longitude !== null &&
+      body.longitude !== ""
+        ? Number(body.longitude)
+        : undefined;
+
+    if (
+      latitude !== undefined &&
+      Number.isNaN(latitude)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid latitude" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      longitude !== undefined &&
+      Number.isNaN(longitude)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid longitude" },
+        { status: 400 }
+      );
+    }
+
     const businesses = await getBusinesses();
 
     const duplicate = businesses.find(
@@ -198,18 +345,36 @@ export async function POST(req: NextRequest) {
 
     if (duplicate) {
       return NextResponse.json(
-        { error: "Business already exists" },
+        {
+          error: "Business already exists",
+        },
         { status: 409 }
       );
     }
 
     const now = new Date().toISOString();
 
+    const slug = generateSlug(
+      businessName
+    );
+
+    const searchKeywords =
+      buildSearchKeywords(
+        businessName,
+        category,
+        city,
+        state,
+        services
+      );
+
     const newBusiness: Business = {
       id: crypto.randomUUID(),
 
+      slug,
+
       ownerId: user.id,
-      ownerName: user.name || "Business Owner",
+      ownerName:
+        user.name || "Business Owner",
 
       businessName,
       category,
@@ -222,25 +387,21 @@ export async function POST(req: NextRequest) {
 
       phone,
       whatsapp,
+
       email,
       website,
 
       openingHours,
-      services: splitServices(body.services),
 
-      latitude:
-  body.latitude !== undefined &&
-  body.latitude !== null &&
-  body.latitude !== ""
-    ? Number(body.latitude)
-    : undefined,
+      services,
 
-longitude:
-  body.longitude !== undefined &&
-  body.longitude !== null &&
-  body.longitude !== ""
-    ? Number(body.longitude)
-    : undefined,
+      imageUrl: undefined,
+      logoUrl: undefined,
+      gallery: [],
+
+      latitude,
+      longitude,
+
       verified: false,
       status: "pending",
 
@@ -249,6 +410,13 @@ longitude:
       whatsappClicks: 0,
       directionClicks: 0,
       websiteClicks: 0,
+
+      rating: 0,
+      reviewCount: 0,
+
+      featured: false,
+
+      searchKeywords,
 
       createdAt: now,
       updatedAt: now,
@@ -268,7 +436,10 @@ longitude:
       { status: 201 }
     );
   } catch (error) {
-    console.error("Create business error:", error);
+    console.error(
+      "Create business error:",
+      error
+    );
 
     return NextResponse.json(
       { error: "Business listing failed" },
